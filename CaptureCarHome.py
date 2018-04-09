@@ -233,7 +233,7 @@ class CaptureCarHome(CaptureBase):
             self.saveCarModels(car_models_datas)
             num+=1
             del car_models_datas
-            logger.info('num: {} have insert'.format(num*numSet))
+            logger.info('num: {} series have been inserted'.format(num*numSet))
         logger.info('len of error_spceconfig_url is: {}'.format(self.error_spceconfig_url))
     def saveCarModels(self, car_models):
         good_datas = car_models
@@ -246,9 +246,9 @@ def main():
     useragent = 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36'
 
     objCarHome = CaptureCarHome(useragent)
-    objCarHome.dealCarBrands()
+    # objCarHome.dealCarBrands()
     # objCarHome.dealCarSeries()
-    # objCarHome.dealCarModels()
+    objCarHome.dealCarModels()
     # objCarHome.get_derler_prices('https://carif.api.autohome.com.cn/dealer/LoadDealerPrice.ashx?_callback=LoadDealerPrice&type=1&seriesid=3064&city=310100',{'Referer': 'https://car.autohome.com.cn/price/series-3064.html', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36'})
     # objCarHome.getSpecList(
     #     'https://dealer.autohome.com.cn/Ajax/GetSpecListByDealer?dealerId=128928&seriesId=3064',
