@@ -222,6 +222,7 @@ class CaptureCarHome(CaptureBase):
         numSet = 100
         car_series_datas = self.get_all_series()#得到所有车系
         num = 0
+        num_replace = 0
         #每一百车系查询后插入一次数据库
         while car_series_datas:
             car_models_datas = []
@@ -232,9 +233,11 @@ class CaptureCarHome(CaptureBase):
             [car_models_datas.extend(job.value) for job in jobs]
             self.saveCarModels(car_models_datas)
             num+=1
+            num_replace+=len(car_models_datas)
             del car_models_datas
             logger.info('num: {} series have been inserted'.format(num*numSet))
         logger.info('len of error_spceconfig_url is: {}'.format(self.error_spceconfig_url))
+        logger.info('num of replace is: {}'.format(num_replace))
     def saveCarModels(self, car_models):
         good_datas = car_models
         table = 'car_home_models'
