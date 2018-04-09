@@ -29,8 +29,12 @@ class Logger():
         new_logger = logging.getLogger(__name__)
         new_logger.setLevel(loglevel)
         formatter = format_dict[loglevel]
+        #覆盖写方式
         filehandler = logging.handlers.RotatingFileHandler(os.path.join(os.path.dirname(os.path.abspath(__file__)), \
-                                                                        'crawling.log'), maxBytes=500000000, backupCount=200)
+                                                                        'crawling.log'), filemode='w', maxBytes=500000000, backupCount=200)
+        #追加写方式
+        # filehandler = logging.handlers.RotatingFileHandler(os.path.join(os.path.dirname(os.path.abspath(__file__)), \
+                                                                        # 'crawling.log'), maxBytes=500000000, backupCount=200)
         filehandler.setFormatter(formatter)
         new_logger.addHandler(filehandler)
         #create handle for stdout
