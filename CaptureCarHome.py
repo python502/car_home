@@ -217,12 +217,14 @@ class CaptureCarHome(CaptureBase):
                 logger.error('{}'.format(e))
         return car_models_datas
 
+    #获取车型信息
     def dealCarModels(self):
         numSet = 100
-        car_models_datas = []
-        car_series_datas = self.get_all_series()
+        car_series_datas = self.get_all_series()#得到所有车系
         num = 0
+        #每一百车系查询后插入一次数据库
         while car_series_datas:
+            car_models_datas = []
             new_datas = car_series_datas[:numSet]
             car_series_datas = car_series_datas[numSet:]
             funlist = [gevent.spawn(self.getCarModels, new_datas) for new_datas in new_datas if new_datas.get('is_stock') == 1]
@@ -230,28 +232,30 @@ class CaptureCarHome(CaptureBase):
             [car_models_datas.extend(job.value) for job in jobs]
             self.saveCarModels(car_models_datas)
             num+=1
+            del car_models_datas
             logger.info('num: {} have insert'.format(num*numSet))
-
+        logger.info('len of error_spceconfig_url is: {}'.format(self.error_spceconfig_url))
     def saveCarModels(self, car_models):
         good_datas = car_models
         table = 'car_home_models'
-        replace_columns = [key for key in car_models[0].iterkeys()]
+        replace_columns = ['t03p00', 't03p01', 't03p02', 't03p03', 't03p04', 't03p05', 't03p06', 't03p07', 't03p08', 't03p09', 't03p10', 't03p11', 't03p12', 't03p13', 't03p14', 't03p15', 't03p16', 't03p17', 'original_price', 't12p14', 'city_id', 't13p00', 't00p08', 't00p09', 'dealer_id', 't00p02', 't00p03', 't00p00', 't00p01', 't00p06', 't00p07', 't00p04', 't00p05', 't07p10', 't07p11', 't07p12', 't07p13', 't07p14', 't07p15', 't00p17', 't00p16', 't00p11', 't10p08', 't00p10', 't00p13', 't08p02', 't08p03', 't08p00', 't00p12', 't08p06', 't08p07', 't08p04', 't08p05', 't00p15', 't08p08', 't08p09', 't00p14', 't07p07', 't07p06', 't07p05', 't07p04', 't07p03', 't07p02', 't07p01', 't07p00', 't07p17', 't07p09', 't07p08', 't14p10', 't14p11', 't14p12', 't14p13', 't14p14', 't14p15', 't15p00', 't15p01', 't15p02', 't15p03', 't15p04', 't15p05', 't15p06', 't15p07', 't08p11', 'model_id', 't08p13', 't08p12', 't08p15', 't08p14', 't08p17', 't08p16', 't08p19', 't08p18', 't14p07', 't14p06', 't14p05', 't14p04', 't14p03', 't14p02', 't14p01', 't14p00', 't14p08', 't10p10', 't10p11', 't10p12', 't10p13', 't11p04', 't11p05', 't11p06', 't11p07', 't11p00', 't11p01', 't11p02', 't11p03', 't08p10', 't11p08', 't11p09', 't01p10', 't01p11', 't10p09', 't08p01', 't10p03', 't10p02', 't10p01', 't10p00', 't10p07', 't10p06', 't10p05', 't10p04', 't11p13', 't11p12', 't11p11', 't11p10', 't11p17', 't11p16', 't11p15', 't11p14', 't11p19', 't11p18', 't14p09', 't02p20', 't02p21', 't01p01', 't01p00', 't01p03', 't01p02', 't01p05', 't01p04', 't01p07', 't01p06', 't01p09', 't01p08', 't13p04', 'series_id', 't09p12', 't09p13', 't09p10', 't09p11', 't09p14', 't09p15', 't13p08', 't13p09', 't13p02', 't13p03', 't12p12', 't13p01', 't13p06', 't13p07', 't12p13', 't13p05', 't06p00', 't06p01', 't06p02', 't06p03', 't05p01', 't05p00', 't05p03', 't05p02', 't12p01', 't12p00', 't12p03', 't12p02', 't12p05', 't12p04', 't12p07', 't12p06', 't12p09', 't12p08', 't12p10', 't09p09', 't09p08', 't12p11', 't09p01', 't09p00', 't09p03', 't09p02', 't09p05', 't09p04', 't09p07', 't09p06', 't02p04', 't02p05', 't02p06', 't02p07', 't02p00', 't02p01', 't02p02', 't02p03', 't13p11', 't13p10', 't12p15', 't02p08', 't02p09', 't04p00', 't04p01', 'price', 't07p16', 'brands_id', 't02p13', 't02p12', 't02p11', 't02p10', 't02p17', 't02p16', 't02p15', 't02p14', 't02p19', 't02p18', 'model_name']
         return self._save_datas(good_datas, table, replace_columns)
+
 def main():
     startTime = datetime.now()
     useragent = 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36'
 
-    objCaptureAmazon = CaptureCarHome(useragent)
-    # objCaptureAmazon.dealCarBrands()
-    # objCaptureAmazon.dealCarSeries()
-    objCaptureAmazon.dealCarModels()
-    # objCaptureAmazon.get_derler_prices('https://carif.api.autohome.com.cn/dealer/LoadDealerPrice.ashx?_callback=LoadDealerPrice&type=1&seriesid=3064&city=310100',{'Referer': 'https://car.autohome.com.cn/price/series-3064.html', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36'})
-    # objCaptureAmazon.getSpecList(
+    objCarHome = CaptureCarHome(useragent)
+    objCarHome.dealCarBrands()
+    # objCarHome.dealCarSeries()
+    # objCarHome.dealCarModels()
+    # objCarHome.get_derler_prices('https://carif.api.autohome.com.cn/dealer/LoadDealerPrice.ashx?_callback=LoadDealerPrice&type=1&seriesid=3064&city=310100',{'Referer': 'https://car.autohome.com.cn/price/series-3064.html', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36'})
+    # objCarHome.getSpecList(
     #     'https://dealer.autohome.com.cn/Ajax/GetSpecListByDealer?dealerId=128928&seriesId=3064',
     #     {'Accept': 'application/json, text/javascript, */*; q=0.01',
     #      'Referer': 'https://dealer.autohome.com.cn/128928/spec_31364.html',
     #      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36'})
-    # objCaptureAmazon.getCarInfos(
+    # objCarHome.getCarInfos(
     #     # {'dealer_id':'128928','model_id':'31364','series_id':'3064'},
     #     {'dealer_id':'130337','model_id':'32790','series_id':'834'},
     #     {'Accept': 'application/json, text/javascript, */*; q=0.01', 'Referer': 'https://dealer.autohome.com.cn/128928/spec_31364.html',
