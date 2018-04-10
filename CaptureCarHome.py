@@ -8,24 +8,24 @@
 # @Software: PyCharm
 # @Desc    :
 import gevent
-from CaptureBase import CaptureBase
 import os
 import re
 import copy
 import json
 import urllib
-import time
 
 from logger import logger
 from bs4 import BeautifulSoup
 from datetime import datetime
 from urlparse import urljoin
 
+from CaptureBase import CaptureBase
+
+#check存放pic的目录
 dir_name = os.path.dirname(os.path.realpath(__file__))
-pic_name = os.path.join(dir_name, 'pic')
-print pic_name
-if not os.path.exists(pic_name):
-    os.makedirs(pic_name)
+pic_dir_name = os.path.join(dir_name, 'pic')
+if not os.path.exists(pic_dir_name):
+    os.makedirs(pic_dir_name)
 
 class CaptureCarHome(CaptureBase):
     home_url = 'https://car.autohome.com.cn/'
@@ -99,7 +99,8 @@ class CaptureCarHome(CaptureBase):
                 result['brands_url'] = urljoin(self.home_url, url)
                 if logo:
                     result['logo_url'] = self._get_logo_url(result['brands_url'])
-                    urllib.urlretrieve(result['logo_url'], os.path.join(pic_name, result['brands_name']))#下载logo
+                    pic_name = result['brands_name']+'.jpg'
+                    urllib.urlretrieve(result['logo_url'], os.path.join(pic_dir_name, pic_name))#下载logo
                 results.append(result)
         return results
 
