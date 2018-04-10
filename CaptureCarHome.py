@@ -9,16 +9,23 @@
 # @Desc    :
 import gevent
 from CaptureBase import CaptureBase
-
+import os
 import re
 import copy
+import json
+import urllib
 import time
 
 from logger import logger
 from bs4 import BeautifulSoup
-import json
 from datetime import datetime
 from urlparse import urljoin
+
+dir_name = os.path.dirname(os.path.realpath(__file__))
+pic_name = os.path.join(dir_name, 'pic')
+print pic_name
+if not os.path.exists(pic_name):
+    os.makedirs(pic_name)
 
 class CaptureCarHome(CaptureBase):
     home_url = 'https://car.autohome.com.cn/'
@@ -92,6 +99,7 @@ class CaptureCarHome(CaptureBase):
                 result['brands_url'] = urljoin(self.home_url, url)
                 if logo:
                     result['logo_url'] = self._get_logo_url(result['brands_url'])
+                    urllib.urlretrieve(result['logo_url'], os.path.join(pic_name, result['brands_name']))#下载logo
                 results.append(result)
         return results
 
@@ -236,7 +244,8 @@ class CaptureCarHome(CaptureBase):
             num_replace+=len(car_models_datas)
             del car_models_datas
             logger.info('num: {} series have been inserted'.format(num*numSet))
-        logger.info('len of error_spceconfig_url is: {}'.format(self.error_spceconfig_url))
+        logger.info('len of error_spceconfig_url is: {}'.format(len(self.error_spceconfig_url)))
+        logger.info('error_spceconfig_url is: {}'.format(self.error_spceconfig_url))
         logger.info('num of replace is: {}'.format(num_replace))
     def saveCarModels(self, car_models):
         good_datas = car_models
@@ -274,9 +283,9 @@ def main():
     useragent = 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36'
 
     objCarHome = CaptureCarHome(useragent)
-    # objCarHome.dealCarBrands()
+    objCarHome.dealCarBrands()
     # objCarHome.dealCarSeries()
-    objCarHome.dealCarModels()
+    # objCarHome.dealCarModels()
     # objCarHome.get_derler_prices('https://carif.api.autohome.com.cn/dealer/LoadDealerPrice.ashx?_callback=LoadDealerPrice&type=1&seriesid=3064&city=310100',{'Referer': 'https://car.autohome.com.cn/price/series-3064.html', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36'})
     # objCarHome.getSpecList(
     #     'https://dealer.autohome.com.cn/Ajax/GetSpecListByDealer?dealerId=128928&seriesId=3064',
