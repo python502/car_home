@@ -314,11 +314,13 @@ class CaptureCarHome(CaptureBase):
             model_id = self.get_model_id(url)
             model_ids.extend(model_id)
         while model_ids:
-            (get_ids, car_models_data) = self.get_spec_models(model_ids[0], series_data)
-            model_ids = list(set(model_ids).difference(set(get_ids)))
-            car_models_datas.extend(car_models_data)
+            try:
+                (get_ids, car_models_data) = self.get_spec_models(model_ids[0], series_data)
+                model_ids = list(set(model_ids).difference(set(get_ids)))
+                car_models_datas.extend(car_models_data)
+            except Exception,e:
+                break
         return car_models_datas
-
     # def getCarModelsOutStock(self, series_data):
     #     car_models_datas = []
     #     series_url = series_data.get('series_url').encode('utf-8')
@@ -380,92 +382,102 @@ class CaptureCarHome(CaptureBase):
         return self._save_datas(good_datas, table, replace_columns)
 
     def get_spec_models(self, model_id, series_data):
-        result_datas = []
-        model_id_list = []
-        spec_url = 'https://car.autohome.com.cn/config/spec/{}.html'.format(model_id)
-        page_source = self.getHtmlselenium(spec_url, '//*[@id="config_data"]')
-        pattern = re.compile(r'<div class="operation" id="config_nav"[\s\S]*<div class="pztip">', re.S)
-        infos_div = pattern.findall(page_source)[0]
-        infos_div+='</div>'
+        try:
+            result_datas = []
+            model_id_list = []
+            spec_url = 'https://car.autohome.com.cn/config/spec/{}.html'.format(model_id)
+            page_source = self.getHtmlselenium(spec_url, '//*[@id="config_data"]')
+            pattern = re.compile(r'<div class="operation" id="config_nav"[\s\S]*<div class="pztip">', re.S)
+            infos_div = pattern.findall(page_source)[0]
+            infos_div+='</div>'
 
-        #<!--椤堕虹-> 此模式注释会影响BeautifulSoup分析  后面的都会丢失
-        pattern = re.compile(r'<![\s\S]*?->', re.S)
-        infos_comments = pattern.findall(infos_div)
-        for infos_comment in infos_comments:
-            infos_div = infos_div.replace(infos_comment, '')
-        soup_div = BeautifulSoup(infos_div, 'lxml')
-        conbox = soup_div.find('div', {'class': 'conbox', 'id': 'config_data'})
-        config_nav = soup_div.find('div', {'class': 'operation', 'id': 'config_nav'})
-        len_spac = len(config_nav.findAll('div', {'class': 'btn_delbar'}))
-        config_nav_infos = config_nav.findAll('td')
-        tables = conbox.findAll('table', {'class': "tbcs"})
-        price_tables = tables[1:2]
-        other_tables = tables[2:]
-        for i in range(len_spac):
-            result = {}
-            td_nav = config_nav_infos[i]
-            result['dealer_id'] = 0
-            result['brands_id'] = series_data.get('brands_id')
-            result['series_id'] = series_data.get('series_id')
-            result['city_id'] = self.city_id
-            result['model_id'] = td_nav.find('div', {'class': 'btn_delbar'}).find('a').attrs['rel'][0]
-            result['model_name'] = td_nav.find('div', {'class': 'carbox'}).find('a').getText()
-            model_id_list.append(result['model_id'])
+            #<!--椤堕虹-> 此模式注释会影响BeautifulSoup分析  后面的都会丢失
+            pattern = re.compile(r'<![\s\S]*?->', re.S)
+            infos_comments = pattern.findall(infos_div)
+            for infos_comment in infos_comments:
+                infos_div = infos_div.replace(infos_comment, '')
+            soup_div = BeautifulSoup(infos_div, 'lxml')
+            conbox = soup_div.find('div', {'class': 'conbox', 'id': 'config_data'})
+            config_nav = soup_div.find('div', {'class': 'operation', 'id': 'config_nav'})
+            len_spac = len(config_nav.findAll('div', {'class': 'btn_delbar'}))
+            config_nav_infos = config_nav.findAll('td')
+            tables = conbox.findAll('table', {'class': "tbcs"})
+            price_tables = tables[1:2]
+            other_tables = tables[2:]
+            for i in range(len_spac):
+                result = {}
+                td_nav = config_nav_infos[i]
+                result['dealer_id'] = 0
+                result['brands_id'] = series_data.get('brands_id')
+                result['series_id'] = series_data.get('series_id')
+                result['city_id'] = self.city_id
+                result['model_id'] = td_nav.find('div', {'class': 'btn_delbar'}).find('a').attrs['rel'][0]
+                result['model_name'] = td_nav.find('div', {'class': 'carbox'}).find('a').getText()
+                model_id_list.append(result['model_id'])
 
-            original_price = price_tables[0].findAll('tr')[0].findAll('td')[i].find('div').getText().encode('utf-8')
-            pattern = re.compile(r'[0-9.]+')
-            original_price = pattern.findall(original_price)
-            result['original_price'] = original_price[0] if original_price else 0
-            # result['original_price'] = 0 if original_price == u'\u6682\u65e0\u62a5\u4ef7' else original_price[:-1]
+                original_price = price_tables[0].findAll('tr')[0].findAll('td')[i].find('div').getText().encode('utf-8')
+                pattern = re.compile(r'[0-9.]+')
+                original_price = pattern.findall(original_price)
+                result['original_price'] = original_price[0] if original_price else 0
+                # result['original_price'] = 0 if original_price == u'\u6682\u65e0\u62a5\u4ef7' else original_price[:-1]
 
-            price = price_tables[0].findAll('tr')[1].findAll('td')[i].find('div').getText().encode('utf-8')
-            price = pattern.findall(price)
-            result['price'] = price[0] if price else 0
+                price = price_tables[0].findAll('tr')[1].findAll('td')[i].find('div').getText().encode('utf-8')
+                price = pattern.findall(price)
+                result['price'] = price[0] if price else 0
 
-            for other_table in other_tables:
-                trs = other_table.findAll('tr')
-                title = trs[0].getText()
-                x = str(self.Config_Title[title]).zfill(2)
-                if x == '16':
-                    #选装包
-                    result['t16p00'] = trs[1].findAll('td')[i].getText()
-                    result['t16p01'] = trs[2].findAll('td')[0].getText()
-                    result['t16p02'] = trs[3].findAll('td')[i].getText()
-                    result['t16p03'] = trs[4].findAll('td')[0].getText()
-                    result['t16p04'] = trs[5].findAll('td')[i].getText()
-                    result['t16p05'] = trs[6].findAll('td')[0].getText()
-                    result['t16p06'] = trs[7].findAll('td')[i].getText()
-                    result['t16p07'] = trs[8].findAll('td')[0].getText()
-                    result['t16p08'] = trs[9].findAll('td')[i].getText()
-                    result['t16p09'] = trs[10].findAll('td')[0].getText()
-                    result['t16p10'] = trs[11].findAll('td')[i].getText()
-                    result['t16p11'] = trs[12].findAll('td')[0].getText()
-                    result['t16p12'] = trs[13].findAll('td')[i].getText()
-                    result['t16p13'] = trs[14].findAll('td')[0].getText()
+                for other_table in other_tables:
+                    trs = other_table.findAll('tr')
+                    title = trs[0].getText()
+                    x = str(self.Config_Title[title]).zfill(2)
+                    if x == '16':
+                        #选装包
+                        # result['t16p00'] = trs[1].findAll('td')[i].getText()
+                        # result['t16p01'] = trs[2].findAll('td')[0].getText()
+                        # result['t16p02'] = trs[3].findAll('td')[i].getText()
+                        # result['t16p03'] = trs[4].findAll('td')[0].getText()
+                        # result['t16p04'] = trs[5].findAll('td')[i].getText()
+                        # result['t16p05'] = trs[6].findAll('td')[0].getText()
+                        # result['t16p06'] = trs[7].findAll('td')[i].getText()
+                        # result['t16p07'] = trs[8].findAll('td')[0].getText()
+                        # result['t16p08'] = trs[9].findAll('td')[i].getText()
+                        # result['t16p09'] = trs[10].findAll('td')[0].getText()
+                        # result['t16p10'] = trs[11].findAll('td')[i].getText()
+                        # result['t16p11'] = trs[12].findAll('td')[0].getText()
+                        # result['t16p12'] = trs[13].findAll('td')[i].getText()
+                        # result['t16p13'] = trs[14].findAll('td')[0].getText()
+                        l = len(trs[:-2])
+                        for i in range(1,l,2):
+                            y0 = str(i-1).zfill(2)
+                            t0 = 't16p{}'.format(x, y0)
+                            result[t0] = tds[i].findAll('td')[i].getText()
+                            y1 = str(i).zfill(2)
+                            t1 = 't16p{}'.format(x, y1)
+                            result[t1] = tds[i].findAll('td')[0].getText()
 
-                    show_colors = trs[15].findAll('td')[i].findAll('li')
-                    all_show_color = []
-                    for show_color in show_colors:
-                        all_show_color.append(show_color.findChild().attrs['title'])
-                    result['t16p14'] = ','.join(all_show_color)
+                        show_colors = trs[15].findAll('td')[i].findAll('li')
+                        all_show_color = []
+                        for show_color in show_colors:
+                            all_show_color.append(show_color.findChild().attrs['title'])
+                        result['t16p14'] = ','.join(all_show_color)
 
-                    inter_colors = trs[16].findAll('td')[i].findAll('li')
-                    all_inter_colors = []
-                    for inter_color in inter_colors:
-                        all_inter_colors.append(inter_color.findChild().attrs['title'])
-                    result['t16p15'] = ','.join(all_inter_colors)
-                else:
-                    for m in range(1, len(trs[1:])+1):
-                        tds = trs[m].findAll('td')
-                        y = str(m-1).zfill(2)
-                        t = 't{}p{}'.format(x, y)
-                        result[t] = tds[i].getText()
-            result['t00p00'] = series_data['series_local']
-            result['t00p01'] = series_data['series_type']
-            result_datas.append(result)
-        return (model_id_list, result_datas)
-
-
+                        inter_colors = trs[16].findAll('td')[i].findAll('li')
+                        all_inter_colors = []
+                        for inter_color in inter_colors:
+                            all_inter_colors.append(inter_color.findChild().attrs['title'])
+                        result['t16p15'] = ','.join(all_inter_colors)
+                    else:
+                        for m in range(1, len(trs[1:])+1):
+                            tds = trs[m].findAll('td')
+                            y = str(m-1).zfill(2)
+                            t = 't{}p{}'.format(x, y)
+                            result[t] = tds[i].getText()
+                result['t00p00'] = series_data['series_local']
+                result['t00p01'] = series_data['series_type']
+                result_datas.append(result)
+            return (model_id_list, result_datas)
+        except Exception, e:
+            logger.error('url: {} error: {}'.format(spec_url, e))
+            raise
     #除了url不同 后面代码与get_spec_models 相同
     def get_series_models(self, spec_id, series_data):
         result_datas = []
@@ -494,7 +506,7 @@ def main():
     #      'Referer': 'https://dealer.autohome.com.cn/128928/spec_31364.html',
     #      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36'})
     # print objCarHome.get_spec_models(2429,{'series_local':1,'series_type':1,'brands_id':'1','series':'1'})
-    a = objCarHome.get_series_models(2429, {'series_local': 1, 'series_type': 1, 'brands_id': '1', 'series': '1'})
+    # a = objCarHome.get_series_models(2429, {'series_local': 1, 'series_type': 1, 'brands_id': '1', 'series': '1'})
     # print a
     # print len(a)
     # print objCarHome.get_model_num(67)
