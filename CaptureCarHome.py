@@ -18,6 +18,7 @@ from logger import logger
 from bs4 import BeautifulSoup
 from datetime import datetime
 from urlparse import urljoin
+from pyquery import PyQuery as pq
 
 from CaptureBase import CaptureBase
 
@@ -54,6 +55,7 @@ class CaptureCarHome(CaptureBase):
                     u'\u706f\u5149\u914d\u7f6e': '13',
                     u'\u73bb\u7483\u002f\u540e\u89c6\u955c': '14',
                     u'\u7a7a\u8c03\u002f\u51b0\u7bb1': '15',
+                    u'\u9009\u88c5\u5305': '16'
                     }
     def __init__(self, user_agent, proxy_ip=None):
         super(CaptureCarHome, self).__init__(user_agent, proxy_ip)
@@ -77,7 +79,7 @@ class CaptureCarHome(CaptureBase):
         # logo_url = soup.find('div', {'class':'uibox-con contbox'}).find('div', {'class':'carbradn-pic'}).find('img').attrs['src']
         return urljoin(self.home_url, logo_url)
 
-    def getCarBrands(self, logo = False):
+    def getCarBrands(self, logo=False):
         results = []
         page_source = self.getHtml(self.left_list_new, self.header)
         page_source = page_source[18:-3]
@@ -114,6 +116,20 @@ class CaptureCarHome(CaptureBase):
         car_brands = self.getCarBrands(logo=True)
         return self.saveCarBrands(car_brands)
 
+    def get_model_num(self, brands_id):
+        data = {}
+        url = 'https://car.autohome.com.cn/AsLeftMenu/As_LeftListNew.ashx?typeId=1&brandId={}'.format(brands_id)
+        page_source = self.getHtml(url, self.header)
+        page_source = page_source[18:-3]
+        soup = BeautifulSoup(page_source, 'lxml')
+        li = soup.find('li', {'id': 'b{}'.format(brands_id), 'class':'current'})
+        dds = li.findAll('dd')
+        for dd in dds:
+            series_id = int(dd.find('a').attrs['id'][7:])
+            model_des = dd.find('em').getText().encode('utf-8')
+            data[series_id] = int(filter(str.isdigit, model_des))
+        return data
+
     def getCarSeries(self, brands_url, brands_id):
         try:
             results = []
@@ -138,6 +154,9 @@ class CaptureCarHome(CaptureBase):
                         copy_result['series_name'] = info.attrs['title']
                         copy_result['is_stock'] = 1 if info.attrs['title'].find(u'\u505c\u552e') == -1 else 0
                         results.append(copy_result)
+            datas = self.get_model_num(brands_id)
+            for result in results:
+                result['model_num'] = datas.get(result.get('series_id'))
             return results
         except Exception, e:
             self.error_series_url.append(brands_url)
@@ -147,7 +166,7 @@ class CaptureCarHome(CaptureBase):
     def saveCarSeries(self, car_series):
         good_datas = car_series
         table = 'car_home_series'
-        replace_columns = ['series_id', 'brands_id', 'series_name', 'series_local', 'series_type', 'series_url', 'is_stock']
+        replace_columns = ['series_id', 'brands_id', 'series_name', 'series_local', 'series_type', 'series_url', 'is_stock', 'model_num']
         return self._save_datas(good_datas, table, replace_columns)
 
     def get_all_series(self):
@@ -159,6 +178,7 @@ class CaptureCarHome(CaptureBase):
         jobs = gevent.joinall(funlist)
         [car_series_datas.extend(job.value) for job in jobs]
         return car_series_datas
+
     def dealCarSeries(self):
         car_series_datas = self.get_all_series()
         return self.saveCarSeries(car_series_datas)
@@ -184,7 +204,7 @@ class CaptureCarHome(CaptureBase):
             title = config_titles[n].getText()
             tds = config_tables[n].findAll('td')
             for m in range(len(tds)):
-                x = str(self.Config_Title.get(title)).zfill(2)
+                x = str(self.Config_Title[title]).zfill(2)
                 y = str(m).zfill(2)
                 t = 't{}p{}'.format(x, y)
                 car_models_data[t] = tds[m].getText()
@@ -195,7 +215,7 @@ class CaptureCarHome(CaptureBase):
         derler_infos = json.loads(page_source).get('result').get('list')
         return derler_infos
 
-    def getCarModels(self, series_data):
+    def getCarModelsInStock(self, series_data):
         car_models_datas = []
         derler_price_url = 'https://carif.api.autohome.com.cn/dealer/LoadDealerPrice.ashx?_callback=LoadDealerPrice&type=1&seriesid={}&city={}'.format(series_data.get('series_id'), self.city_id)
         header = {'Referer': series_data.get('series_url'), 'User-Agent': self.user_agent}
@@ -226,10 +246,15 @@ class CaptureCarHome(CaptureBase):
                 logger.error('{}'.format(e))
         return car_models_datas
 
-    #获取车型信息
     def dealCarModels(self):
+        car_series_datas = self.get_all_series()  # 得到所有车系
+        self.dealCarModelsInStock(car_series_datas)
+        self.dealCarModelsOutStock(car_series_datas)
+
+    #获取车型信息
+    def dealCarModelsInStock(self, car_series_datas):
         numSet = 100
-        car_series_datas = self.get_all_series()#得到所有车系
+        # car_series_datas = self.get_all_series()#得到所有车系
         num = 0
         num_replace = 0
         #每一百车系查询后插入一次数据库
@@ -237,7 +262,7 @@ class CaptureCarHome(CaptureBase):
             car_models_datas = []
             new_datas = car_series_datas[:numSet]
             car_series_datas = car_series_datas[numSet:]
-            funlist = [gevent.spawn(self.getCarModels, new_datas) for new_datas in new_datas if new_datas.get('is_stock') == 1]
+            funlist = [gevent.spawn(self.getCarModelsInStock, new_datas) for new_datas in new_datas if new_datas.get('is_stock') == 1]
             jobs = gevent.joinall(funlist)
             [car_models_datas.extend(job.value) for job in jobs]
             self.saveCarModels(car_models_datas)
@@ -247,7 +272,81 @@ class CaptureCarHome(CaptureBase):
             logger.info('num: {} series have been inserted'.format(num*numSet))
         logger.info('len of error_spceconfig_url is: {}'.format(len(self.error_spceconfig_url)))
         logger.info('error_spceconfig_url is: {}'.format(self.error_spceconfig_url))
-        logger.info('num of replace is: {}'.format(num_replace))
+        logger.info('dealCarModelsInStock num of replace is: {}'.format(num_replace))
+
+    def __format_source(self, page_source):
+        sources = page_source.split('\n')
+        result = []
+        for s in sources:
+            if s.strip().startswith('<!--'):
+                continue
+            else:
+                result.append(s)
+        return '\n'.join(result)
+
+
+    def get_model_id(self, url):
+        model_ids = []
+        page_source = self.getHtml(url, self.header)
+        page_source = page_source.decode("gb2312", errors='ignore').encode('utf-8')
+        page_source = self.__format_source(page_source)
+        soup = BeautifulSoup(page_source, 'html.parser')
+        interval01_lists = soup.findAll('ul', {'class': 'interval01-list'})
+        for interval01_list in interval01_lists:
+            lis = interval01_list.findAll('li')
+            for li in lis:
+                model_id = li.attrs['data-value']
+                model_ids.append(model_id)
+        return model_ids
+
+
+    def getCarModelsOutStock(self, series_data):
+        car_models_datas = []
+        model_ids = []
+        count = series_data.get('model_num')
+        if 0 == count%10:
+            page = count/10
+        else:
+            page = count/10+1
+        series_url = series_data.get('series_url').encode('utf-8')
+        url_list = ['{}-0-0-0-0-{}'.format(series_url.split('.html')[0], i+1) + '.html' for i in range(page)]
+        for url in url_list:
+            model_id = self.get_model_id(url)
+            model_ids.extend(model_id)
+        while model_ids:
+            (get_ids, car_models_data) = self.get_spec_models(model_ids[0], series_data)
+            model_ids = list(set(model_ids).difference(set(get_ids)))
+            car_models_datas.extend(car_models_data)
+        return car_models_datas
+
+    # def getCarModelsOutStock(self, series_data):
+    #     car_models_datas = []
+    #     series_url = series_data.get('series_url').encode('utf-8')
+    #     url = '{}-0-0-0-0-{}'.format(series_url.split('.html')[0], 1) + '.html'
+    #     model_ids = self.get_model_id(url)
+    #     if model_ids:
+    #         car_models_datas = self.get_series_models(model_ids[0], series_data)
+    #     return car_models_datas
+    #获取车型信息
+    def dealCarModelsOutStock(self, car_series_datas):
+        numSet = 100
+        num = 0
+        num_replace = 0
+        #每一百车系查询后插入一次数据库
+        while car_series_datas:
+            car_models_datas = []
+            new_datas = car_series_datas[:numSet]
+            car_series_datas = car_series_datas[numSet:]
+            funlist = [gevent.spawn(self.getCarModelsOutStock, new_datas) for new_datas in new_datas if new_datas.get('is_stock') == 0]
+            jobs = gevent.joinall(funlist)
+            [car_models_datas.extend(job.value) for job in jobs]
+            self.saveCarModels(car_models_datas)
+            num+=1
+            num_replace+=len(car_models_datas)
+            del car_models_datas
+            logger.info('num: {} series have been inserted'.format(num*numSet))
+        logger.info('dealCarModelsOutStock num of replace is: {}'.format(num_replace))
+
     def saveCarModels(self, car_models):
         good_datas = car_models
         table = 'car_home_models'
@@ -276,17 +375,112 @@ class CaptureCarHome(CaptureBase):
                            't09p07', 't09p06', 't02p04', 't02p05', 't02p06', 't02p07', 't02p00', 't02p01', 't02p02',\
                            't02p03', 't13p11', 't13p10', 't12p15', 't02p08', 't02p09', 't04p00', 't04p01', 'price',\
                            't07p16', 'brands_id', 't02p13', 't02p12', 't02p11', 't02p10', 't02p17', 't02p16', 't02p15',\
-                           't02p14', 't02p19', 't02p18', 'model_name']
+                           't02p14', 't02p19', 't02p18', 'model_name','t16p00', 't16p01', 't16p02', 't16p03', 't16p04',\
+                           't16p05', 't16p06', 't16p07', 't16p08','t16p09', 't16p10', 't16p11', 't16p12', 't16p13']
         return self._save_datas(good_datas, table, replace_columns)
+
+    def get_spec_models(self, model_id, series_data):
+        result_datas = []
+        model_id_list = []
+        spec_url = 'https://car.autohome.com.cn/config/spec/{}.html'.format(model_id)
+        page_source = self.getHtmlselenium(spec_url, '//*[@id="config_data"]')
+        pattern = re.compile(r'<div class="operation" id="config_nav"[\s\S]*<div class="pztip">', re.S)
+        infos_div = pattern.findall(page_source)[0]
+        infos_div+='</div>'
+
+        #<!--椤堕虹-> 此模式注释会影响BeautifulSoup分析  后面的都会丢失
+        pattern = re.compile(r'<![\s\S]*?->', re.S)
+        infos_comments = pattern.findall(infos_div)
+        for infos_comment in infos_comments:
+            infos_div = infos_div.replace(infos_comment, '')
+        soup_div = BeautifulSoup(infos_div, 'lxml')
+        conbox = soup_div.find('div', {'class': 'conbox', 'id': 'config_data'})
+        config_nav = soup_div.find('div', {'class': 'operation', 'id': 'config_nav'})
+        len_spac = len(config_nav.findAll('div', {'class': 'btn_delbar'}))
+        config_nav_infos = config_nav.findAll('td')
+        tables = conbox.findAll('table', {'class': "tbcs"})
+        price_tables = tables[1:2]
+        other_tables = tables[2:]
+        for i in range(len_spac):
+            result = {}
+            td_nav = config_nav_infos[i]
+            result['dealer_id'] = 0
+            result['brands_id'] = series_data.get('brands_id')
+            result['series_id'] = series_data.get('series_id')
+            result['city_id'] = self.city_id
+            result['model_id'] = td_nav.find('div', {'class': 'btn_delbar'}).find('a').attrs['rel'][0]
+            result['model_name'] = td_nav.find('div', {'class': 'carbox'}).find('a').getText()
+            model_id_list.append(result['model_id'])
+
+            original_price = price_tables[0].findAll('tr')[0].findAll('td')[i].find('div').getText().encode('utf-8')
+            pattern = re.compile(r'[0-9.]+')
+            original_price = pattern.findall(original_price)
+            result['original_price'] = original_price[0] if original_price else 0
+            # result['original_price'] = 0 if original_price == u'\u6682\u65e0\u62a5\u4ef7' else original_price[:-1]
+
+            price = price_tables[0].findAll('tr')[1].findAll('td')[i].find('div').getText().encode('utf-8')
+            price = pattern.findall(price)
+            result['price'] = price[0] if price else 0
+
+            for other_table in other_tables:
+                trs = other_table.findAll('tr')
+                title = trs[0].getText()
+                x = str(self.Config_Title[title]).zfill(2)
+                if x == '16':
+                    #选装包
+                    result['t16p00'] = trs[1].findAll('td')[i].getText()
+                    result['t16p01'] = trs[2].findAll('td')[0].getText()
+                    result['t16p02'] = trs[3].findAll('td')[i].getText()
+                    result['t16p03'] = trs[4].findAll('td')[0].getText()
+                    result['t16p04'] = trs[5].findAll('td')[i].getText()
+                    result['t16p05'] = trs[6].findAll('td')[0].getText()
+                    result['t16p06'] = trs[7].findAll('td')[i].getText()
+                    result['t16p07'] = trs[8].findAll('td')[0].getText()
+                    result['t16p08'] = trs[9].findAll('td')[i].getText()
+                    result['t16p09'] = trs[10].findAll('td')[0].getText()
+                    result['t16p10'] = trs[11].findAll('td')[i].getText()
+                    result['t16p11'] = trs[12].findAll('td')[0].getText()
+                    result['t16p12'] = trs[13].findAll('td')[i].getText()
+                    result['t16p13'] = trs[14].findAll('td')[0].getText()
+
+                    show_colors = trs[15].findAll('td')[i].findAll('li')
+                    all_show_color = []
+                    for show_color in show_colors:
+                        all_show_color.append(show_color.findChild().attrs['title'])
+                    result['t16p14'] = ','.join(all_show_color)
+
+                    inter_colors = trs[16].findAll('td')[i].findAll('li')
+                    all_inter_colors = []
+                    for inter_color in inter_colors:
+                        all_inter_colors.append(inter_color.findChild().attrs['title'])
+                    result['t16p15'] = ','.join(all_inter_colors)
+                else:
+                    for m in range(1, len(trs[1:])+1):
+                        tds = trs[m].findAll('td')
+                        y = str(m-1).zfill(2)
+                        t = 't{}p{}'.format(x, y)
+                        result[t] = tds[i].getText()
+            result['t00p00'] = series_data['series_local']
+            result['t00p01'] = series_data['series_type']
+            result_datas.append(result)
+        return (model_id_list, result_datas)
+
+
+    #除了url不同 后面代码与get_spec_models 相同
+    def get_series_models(self, spec_id, series_data):
+        result_datas = []
+        spec_url = 'https://car.autohome.com.cn/config/series/{}.html'.format(spec_id)
+
+
 
 def main():
     startTime = datetime.now()
     useragent = 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36'
 
     objCarHome = CaptureCarHome(useragent)
-    objCarHome.dealCarBrands()
+    # objCarHome.dealCarBrands()
     # objCarHome.dealCarSeries()
-    # objCarHome.dealCarModels()
+    objCarHome.dealCarModels()
     # objCarHome.get_derler_prices('https://carif.api.autohome.com.cn/dealer/LoadDealerPrice.ashx?_callback=LoadDealerPrice&type=1&seriesid=3064&city=310100',{'Referer': 'https://car.autohome.com.cn/price/series-3064.html', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36'})
     # objCarHome.getSpecList(
     #     'https://dealer.autohome.com.cn/Ajax/GetSpecListByDealer?dealerId=128928&seriesId=3064',
@@ -299,6 +493,12 @@ def main():
     #     {'Accept': 'application/json, text/javascript, */*; q=0.01', 'Referer': 'https://dealer.autohome.com.cn/128928/spec_31364.html',
     #      'Referer': 'https://dealer.autohome.com.cn/128928/spec_31364.html',
     #      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/65.0.3325.181 Safari/537.36'})
+    # print objCarHome.get_spec_models(2429,{'series_local':1,'series_type':1,'brands_id':'1','series':'1'})
+    a = objCarHome.get_series_models(2429, {'series_local': 1, 'series_type': 1, 'brands_id': '1', 'series': '1'})
+    # print a
+    # print len(a)
+    # print objCarHome.get_model_num(67)
+    # print objCarHome.get_model_id('https://car.autohome.com.cn/price/series-561-0-3-0-0-0-0-1.html')
     endTime = datetime.now()
     print 'seconds', (endTime - startTime).seconds
 if __name__ == '__main__':

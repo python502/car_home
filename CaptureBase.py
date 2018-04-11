@@ -142,7 +142,7 @@ class CaptureBase(object):
                         time.sleep(1)
                     endTime = datetime.now()
                 else:
-                    raise TimeoutException('hotels __getHtmlselenium timeout')
+                    raise TimeoutException('url: {} __getHtmlselenium timeout'.format(url))
             driver.implicitly_wait(10)
             page = driver.page_source.encode('utf-8') if isinstance(driver.page_source, (str, unicode)) else driver.page_source
             logger.debug('driver.page_source: {}'.format(page))
